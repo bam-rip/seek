@@ -2,6 +2,8 @@
 
 A Spotlight-style launcher for Windows 10, written as one C file using only Win32.
 
+**[Download seek.exe](https://github.com/bam-rip/seek/releases/latest/download/seek.exe)** (latest release, Windows 64-bit). Run it and press Alt+Space. No installer is needed. Windows SmartScreen may warn you the first time because the exe isn't signed. Choose "More info", then "Run anyway".
+
 - **Alt+Space** opens it. Start typing to find apps, files and folders.
 - **Enter** opens the selected item. **Ctrl+Enter** shows it in Explorer.
 - **Esc** clears the text, and a second Esc closes Seek.
