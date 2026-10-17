@@ -60,7 +60,7 @@ static HIMAGELIST g_sysil;
 static int g_iconPx;
 static float S = 1;
 static COLORREF C_BG, C_FIELD, C_SEL, C_TEXT, C_SUB, C_BORDER;
-static const COLORREF C_ACCENT = RGB(0, 120, 215);
+static COLORREF C_ACCENT = RGB(0, 120, 215);
 static HBRUSH g_fieldBrush;
 static volatile LONG g_scanning, g_dirty = 1, g_watching;
 static DWORD g_lastScan;
@@ -901,12 +901,48 @@ static int acrylic(HWND h, int on) {
     return f && f(h, &d);
 }
 
-/* follows the Windows app light/dark setting; called at startup and on WM_SETTINGCHANGE */
+/* Optional Silver Styler integration. Seek works on its own; if %APPDATA%\SilverStyler exists,
+   theme.cfg and seek.cfg there can set theme=light|dark, accent=RRGGBB and blur=0|1, and the
+   "SilverStylerReload" broadcast makes Seek pick changes up live. */
+static int g_cfgTheme, g_cfgBlur = 1; /* theme: 0 = follow Windows, 1 = light, 2 = dark */
+static UINT g_reloadMsg;
+
+static void readStylerCfg(const wchar_t *name) {
+    wchar_t path[MAX_PATH], line[256];
+    if (FAILED(SHGetFolderPathW(NULL, CSIDL_APPDATA, NULL, 0, path))) return;
+    wcscat_s(path, MAX_PATH, L"\\SilverStyler\\");
+    wcscat_s(path, MAX_PATH, name);
+    FILE *f = _wfopen(path, L"r, ccs=UTF-8");
+    if (!f) return;
+    while (fgetws(line, 256, f)) {
+        wchar_t *eq = wcschr(line, L'='), *v;
+        if (!eq || line[0] == L'#') continue;
+        *eq = 0; v = eq + 1;
+        while (*v == L' ') v++;
+        v[wcscspn(v, L"\r\n ")] = 0;
+        if (!_wcsicmp(line, L"theme")) g_cfgTheme = !_wcsicmp(v, L"light") ? 1 : !_wcsicmp(v, L"dark") ? 2 : g_cfgTheme;
+        else if (!_wcsicmp(line, L"blur")) g_cfgBlur = _wtoi(v) != 0;
+        else if (!_wcsicmp(line, L"accent")) {
+            unsigned long c = wcstoul(v[0] == L'#' ? v + 1 : v, NULL, 16);
+            C_ACCENT = RGB((c >> 16) & 255, (c >> 8) & 255, c & 255);
+        }
+    }
+    fclose(f);
+}
+
+static void loadStylerCfg(void) {
+    g_cfgTheme = 0; g_cfgBlur = 1; C_ACCENT = RGB(0, 120, 215);
+    readStylerCfg(L"theme.cfg");
+    readStylerCfg(L"seek.cfg");
+}
+
+/* follows the Windows app light/dark setting (unless Silver Styler overrides it); called at startup and on WM_SETTINGCHANGE */
 static void theme(void) {
     DWORD light = 0, sz = sizeof light;
     RegGetValueW(HKEY_CURRENT_USER, L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
                  L"AppsUseLightTheme", RRF_RT_REG_DWORD, NULL, &light, &sz);
-    int blur = acrylic(g_wnd, !light) && !light;
+    if (g_cfgTheme) light = g_cfgTheme == 1;
+    int blur = acrylic(g_wnd, !light && g_cfgBlur) && !light;
     /* Otto's Theme.Back / Theme.Field, and Theme.Over(44) for the hovered card */
     if (light) { C_BG = RGB(243, 243, 243); C_FIELD = RGB(255, 255, 255); C_SEL = RGB(211, 211, 211); C_TEXT = RGB(0, 0, 0); C_SUB = RGB(96, 96, 96); C_BORDER = RGB(200, 200, 200); }
     else       { C_BG = RGB(26, 26, 26);    C_FIELD = RGB(46, 46, 46);    C_SEL = RGB(66, 66, 66); C_TEXT = RGB(255, 255, 255); C_SUB = RGB(160, 160, 160); C_BORDER = RGB(60, 60, 60); }
@@ -924,6 +960,13 @@ static int rowAt(LPARAM lp) {
 }
 
 static LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == g_reloadMsg && g_reloadMsg) {
+        loadStylerCfg();
+        theme();
+        InvalidateRect(h, NULL, TRUE);
+        InvalidateRect(g_edit, NULL, TRUE);
+        return 0;
+    }
     switch (msg) {
     case WM_HOTKEY: case WM_SHOWME:
         if (msg == WM_HOTKEY && IsWindowVisible(h) && GetForegroundWindow() == h) hide(); else show();
@@ -1086,6 +1129,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, LPWSTR cmd, int show_) {
     RegisterClassW(&wc);
     g_wnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, L"SeekWnd", L"Seek", WS_POPUP | WS_CLIPCHILDREN,
                             0, 0, W_WIN, H_FIELD, NULL, NULL, inst, NULL);
+    g_reloadMsg = RegisterWindowMessageW(L"SilverStylerReload");
+    loadStylerCfg();
     theme();
     int eh = PX(20);
     g_edit = CreateWindowExW(0, L"EDIT", L"", WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
