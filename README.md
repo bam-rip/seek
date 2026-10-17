@@ -24,3 +24,8 @@ Dev flags:
 - `seek.exe --bench` prints index and search timings.
 - `seek.exe --calc "expr"` prints what the calculator would show.
 - `seek.exe --shot "query" out.bmp` renders the window to a file.
+
+## Customising
+
+Every size, colour, font and behaviour is a setting: width, position, field and row heights, corner radius, border, fonts, every colour, opacity, the hotkey, which parts show (icons, subtitles, search icon, selection bar), whether results open above or below, and an optional always-visible launcher (a search bar like Windows 10's, or a dot) placed anywhere. With [Silver Styler](https://github.com/bam-rip/silver-styler), press Ctrl+Alt+S and open the Seek tab, or `silver seek set <key> <value>`. Presets (spotlight, windows10, corner_dot, minimal, classic) are just starting points that fill those settings in.
+
